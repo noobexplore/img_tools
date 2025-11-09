@@ -221,16 +221,23 @@ def run_pipeline(args):
     执行完整的图像处理流水线。
     """
     # --- 路径定义 ---
-    raw_input_folder = "raw_data"
-    line_output_folder = "processed_images/line"
+    base_dir = args.input_dir
+    raw_input_folder = base_dir
     star_assets_folder = "star_images"
-    final_map_folder = "processed_images/map"
-    merge_output_folder = "processed_images/merge"
     map_images_folder = "map_images"
+    line_output_folder = os.path.join(base_dir, "processed_images/line")
+    final_map_folder = os.path.join(base_dir, "processed_images/map")
+    merge_output_folder = os.path.join(base_dir, "processed_images/merge")
+    visualize_output_folder = os.path.join(base_dir, "processed_images/visualize")
+
+    # 确保所有输出目录都存在
+    for folder in [line_output_folder, final_map_folder, merge_output_folder, visualize_output_folder]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
 
     # --- 步骤 1: 绘制透明线 ---
     print("--- [步骤 1/2] 开始绘制透明线... ---")
-    draw_lines_on_images(input_dir=raw_input_folder, output_dir=line_output_folder, num_lines=100)
+    draw_lines_on_images(input_dir=raw_input_folder, output_dir=line_output_folder, visualize_dir=visualize_output_folder, num_lines=100)
     print("--- 透明线绘制完成 ---\n")
 
     # --- 步骤 2: 根据策略叠加 ---
@@ -283,6 +290,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="图像处理流水线")
     parser.add_argument(
         'strategy', type=str, choices=['grid', 'disc', 'merge'], help="选择要执行的策略: 'grid', 'disc', 或 'merge'")
+    parser.add_argument(
+        'input_dir', type=str, help="输入文件夹的路径")
 
     # 'grid' 策略的参数
     grid_group = parser.add_argument_group('grid 策略参数')
