@@ -2,7 +2,9 @@ import random
 import math
 import os
 from PIL import Image
+from pathlib import Path
 from img_processor import process_images as draw_lines_on_images
+from img_processor import resize_images
 
 
 def merge_images(base_image_path, overlay_image_path, output_image_path, tolerance=10):
@@ -51,24 +53,22 @@ def merge_images_with_grid_jitter(input_folder, star_images_folder, output_folde
     """
     策略 'grid': 在地图上使用网格抖动算法叠加星星图片。
     """
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    output_path = Path(output_folder)
+    output_path.mkdir(parents=True, exist_ok=True)
 
-    image_files = [f for f in os.listdir(input_folder) if f.endswith(('.png', '.jpg', '.jpeg'))]
-    star_image_files = [f for f in os.listdir(star_images_folder) if f.endswith(('.png', '.jpg', '.jpeg'))]
+    image_files = list(Path(input_folder).glob('*[!.db]'))
+    star_image_files = list(Path(star_images_folder).glob('*[!.db]'))
 
     if not star_image_files:
         print("错误: 星星图片文件夹下没有找到图片。")
         return
 
     for image_file in image_files:
-        base_image_path = os.path.join(input_folder, image_file)
-        star_image_file = random.choice(star_image_files)
-        star_image_path = os.path.join(star_images_folder, star_image_file)
-        output_image_path = os.path.join(output_folder, f"grid_jitter_{image_file}")
+        star_image_path = random.choice(star_image_files)
+        output_image_path = output_path / f"grid_jitter_{image_file.name}"
 
         try:
-            base_image = Image.open(base_image_path).convert("RGBA")
+            base_image = Image.open(image_file).convert("RGBA")
             original_star_image = Image.open(star_image_path).convert("RGBA")
             base_width, base_height = base_image.size
 
@@ -104,13 +104,13 @@ def merge_images_with_grid_jitter(input_folder, star_images_folder, output_folde
                         base_image.paste(scaled_star_image, (x, y), scaled_star_image)
                         star_count += 1
 
-            if image_file.lower().endswith(('.jpg', '.jpeg')):
+            if image_file.suffix.lower() in ['.jpg', '.jpeg']:
                 base_image = base_image.convert("RGB")
             base_image.save(output_image_path)
             print(f"成功使用网格抖动布局添加 {star_count} 个星星，并保存到: {output_image_path}")
 
         except FileNotFoundError:
-            print(f"错误: 确保图片路径正确。请检查 '{base_image_path}' 和 '{star_image_path}' 是否存在。")
+            print(f"错误: 确保图片路径正确。请检查 '{image_file}' 和 '{star_image_path}' 是否存在。")
         except Exception as e:
             print(f"发生错误: {e}")
 
@@ -159,24 +159,22 @@ def merge_images_with_poisson_disc(input_folder, star_images_folder, output_fold
     """
     策略 'disc': 在地图上使用泊松盘采样算法叠加星星图片。
     """
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    output_path = Path(output_folder)
+    output_path.mkdir(parents=True, exist_ok=True)
 
-    image_files = [f for f in os.listdir(input_folder) if f.endswith(('.png', '.jpg', '.jpeg'))]
-    star_image_files = [f for f in os.listdir(star_images_folder) if f.endswith(('.png', '.jpg', '.jpeg'))]
+    image_files = list(Path(input_folder).glob('*[!.db]'))
+    star_image_files = list(Path(star_images_folder).glob('*[!.db]'))
 
     if not star_image_files:
         print("错误: 星星图片文件夹下没有找到图片。")
         return
 
     for image_file in image_files:
-        base_image_path = os.path.join(input_folder, image_file)
-        star_image_file = random.choice(star_image_files)
-        star_image_path = os.path.join(star_images_folder, star_image_file)
-        output_image_path = os.path.join(output_folder, f"poisson_disc_{image_file}")
+        star_image_path = random.choice(star_image_files)
+        output_image_path = output_path / f"poisson_disc_{image_file.name}"
 
         try:
-            base_image = Image.open(base_image_path).convert("RGBA")
+            base_image = Image.open(image_file).convert("RGBA")
             original_star_image = Image.open(star_image_path).convert("RGBA")
             base_width, base_height = base_image.size
 
@@ -202,13 +200,13 @@ def merge_images_with_poisson_disc(input_folder, star_images_folder, output_fold
                 if 0 <= paste_x < base_width and 0 <= paste_y < base_height:
                     base_image.paste(scaled_star_image, (paste_x, paste_y), scaled_star_image)
 
-            if image_file.lower().endswith(('.jpg', '.jpeg')):
+            if image_file.suffix.lower() in ['.jpg', '.jpeg']:
                 base_image = base_image.convert("RGB")
             base_image.save(output_image_path)
             print(f"成功使用泊松盘采样布局添加 {len(points)} 个星星，并保存到: {output_image_path}")
 
         except FileNotFoundError:
-            print(f"错误: 确保图片路径正确。请检查 '{base_image_path}' 和 '{star_image_path}' 是否存在。")
+            print(f"错误: 确保图片路径正确。请检查 '{image_file}' 和 '{star_image_path}' 是否存在。")
         except Exception as e:
             print(f"发生错误: {e}")
 
@@ -221,28 +219,44 @@ def run_pipeline(args):
     执行完整的图像处理流水线。
     """
     # --- 路径定义 ---
-    base_dir = args.input_dir
+    base_dir = Path(args.input_dir)
     raw_input_folder = base_dir
-    star_assets_folder = "star_images"
-    map_images_folder = "map_images"
-    line_output_folder = os.path.join(base_dir, "processed_images/line")
-    final_map_folder = os.path.join(base_dir, "processed_images/map")
-    merge_output_folder = os.path.join(base_dir, "processed_images/merge")
-    visualize_output_folder = os.path.join(base_dir, "processed_images/visualize")
+    star_assets_folder = Path("star_images")
+    map_images_folder = Path("map_images")
+    
+    # 新增：调整尺寸后的图片目录
+    resized_output_folder = base_dir / "processed_images" / "raw"
+    
+    line_output_folder = base_dir / "processed_images" / "line"
+    final_map_folder = base_dir / "processed_images" / "map"
+    merge_output_folder = base_dir / "processed_images" / "merge"
+    visualize_output_folder = base_dir / "processed_images" / "visualize"
 
     # 确保所有输出目录都存在
-    for folder in [line_output_folder, final_map_folder, merge_output_folder, visualize_output_folder]:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
+    for folder in [resized_output_folder, line_output_folder, final_map_folder, merge_output_folder, visualize_output_folder]:
+        folder.mkdir(parents=True, exist_ok=True)
+
+    # --- 步骤 0: 调整图片尺寸 ---
+    print("--- [步骤 0/3] 开始调整图片尺寸... ---")
+    resize_images(
+        input_dir=raw_input_folder,
+        output_dir=resized_output_folder
+    )
+    print("--- 图片尺寸调整完成 ---\n")
 
     # --- 步骤 1: 绘制透明线 ---
-    print("--- [步骤 1/2] 开始绘制透明线... ---")
-    draw_lines_on_images(input_dir=raw_input_folder, output_dir=line_output_folder, visualize_dir=visualize_output_folder, num_lines=100)
+    print("--- [步骤 1/3] 开始绘制透明线... ---")
+    draw_lines_on_images(
+        input_dir=resized_output_folder,  # 使用调整尺寸后的图片
+        output_dir=line_output_folder,
+        visualize_dir=visualize_output_folder,
+        num_lines=100
+    )
     print("--- 透明线绘制完成 ---\n")
 
     # --- 步骤 2: 根据策略叠加 ---
     strategy = args.strategy
-    print(f"--- [步骤 2/2] 应用 '{strategy}' 策略进行叠加... ---")
+    print(f"--- [步骤 2/3] 应用 '{strategy}' 策略进行叠加... ---")
 
     line_processed_files_folder = line_output_folder
 
@@ -264,22 +278,17 @@ def run_pipeline(args):
             scale_range=args.scale_range
         )
     elif strategy == 'merge':
-        if not os.path.exists(merge_output_folder):
-            os.makedirs(merge_output_folder)
-
-        line_files = [f for f in os.listdir(line_processed_files_folder) if f.endswith(('.png', '.jpg', '.jpeg'))]
-        map_files = [f for f in os.listdir(map_images_folder) if f.endswith(('.png', '.jpg', '.jpeg'))]
+        line_files = list(line_processed_files_folder.glob('*[!.db]'))
+        map_files = list(map_images_folder.glob('*[!.db]'))
 
         if not map_files:
             print("错误: 地图图片文件夹下没有找到图片。")
             return
 
         for line_file in line_files:
-            line_image_path = os.path.join(line_processed_files_folder, line_file)
             map_file = random.choice(map_files)
-            map_image_path = os.path.join(map_images_folder, map_file)
-            output_image_path = os.path.join(merge_output_folder, f"merged_{line_file}")
-            merge_images(line_image_path, map_image_path, output_image_path)
+            output_image_path = merge_output_folder / f"merged_{line_file.name}"
+            merge_images(line_file, map_file, output_image_path)
     else:
         print(f"错误：未知的策略 '{strategy}'。请选择 'grid', 'disc', 或 'merge'。")
 

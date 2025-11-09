@@ -74,6 +74,48 @@ def visualize_invisible_lines(image_rgba, overlay_on_original=True):
     return vis
 
 
+def resize_images(input_dir, output_dir, size=(800, 800)):
+    """
+    批量调整图片尺寸并保存。
+    """
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    supported_formats = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')
+
+    image_files = []
+    for ext in supported_formats:
+        image_files.extend(Path(input_dir).glob(f'*{ext}'))
+        image_files.extend(Path(input_dir).glob(f'*{ext.upper()}'))
+
+    if not image_files:
+        print(f"在目录 {input_dir} 中没有找到支持的图片文件")
+        return
+
+    print(f"找到 {len(image_files)} 张图片，开始调整尺寸...")
+    resized_count = 0
+    for image_path in image_files:
+        try:
+            # 修复中文路径读取问题
+            img = cv2.imdecode(np.fromfile(str(image_path), dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                print(f"无法读取图片: {image_path}")
+                continue
+
+            # 调整尺寸
+            resized_img = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
+
+            # 保存图片
+            output_path = Path(output_dir) / image_path.name
+            # 修复中文路径写入问题
+            cv2.imencode(output_path.suffix, resized_img)[1].tofile(str(output_path))
+
+            print(f"✅ {image_path.name} -> {output_path.name} (尺寸: {size[0]}x{size[1]})")
+            resized_count += 1
+        except Exception as e:
+            print(f"❌ 调整图片 {image_path} 尺寸时出错: {e}")
+
+    print(f"\n尺寸调整完成，共 {resized_count} 张图片。结果保存在: {output_dir}")
+
+
 def process_images(input_dir="raw_data", output_dir="processed_images/line", visualize_dir="processed_images/visualize", num_lines=None):
     """
     批量处理图片：添加隐形透明线 + 可视化线条
@@ -97,8 +139,8 @@ def process_images(input_dir="raw_data", output_dir="processed_images/line", vis
 
     for image_path in image_files:
         try:
-            # 读取图片
-            img = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+            # 修复中文路径读取问题
+            img = cv2.imdecode(np.fromfile(str(image_path), dtype=np.uint8), cv2.IMREAD_UNCHANGED)
             if img is None:
                 print(f"无法读取图片: {image_path}")
                 continue
@@ -111,12 +153,13 @@ def process_images(input_dir="raw_data", output_dir="processed_images/line", vis
             output_png = Path(output_dir) / f"processed_{base_name}.png"
             output_vis = Path(visualize_dir) / f"visualize_processed_{base_name}.png"
 
-            # 保存含透明线版本
-            cv2.imwrite(str(output_png), processed_image)
+            # 修复中文路径写入问题
+            cv2.imencode(".png", processed_image)[1].tofile(str(output_png))
 
             # 生成线条可视化图（红线叠加）
             vis_image = visualize_invisible_lines(processed_image, overlay_on_original=True)
-            cv2.imwrite(str(output_vis), vis_image)
+            cv2.imencode(".png", vis_image)[1].tofile(str(output_vis))
+
 
             print(f"✅ {image_path.name} -> {output_png.name}, 可视化: {output_vis.name}")
             processed_count += 1
@@ -128,9 +171,22 @@ def process_images(input_dir="raw_data", output_dir="processed_images/line", vis
 
 
 if __name__ == "__main__":
+    # 示例工作流
+    raw_input = "raw_data"
+    resized_output = "processed_images/raw"
+    line_output = "processed_images/line"
+    visualize_output = "processed_images/visualize"
+
+    # 1. 调整尺寸
+    resize_images(
+        input_dir=raw_input,
+        output_dir=resized_output
+    )
+
+    # 2. 在调整尺寸后的图片上绘制线条
     process_images(
-        input_dir="raw_data",
-        output_dir="processed_images/line",
-        visualize_dir="processed_images/visualize",
+        input_dir=resized_output,
+        output_dir=line_output,
+        visualize_dir=visualize_output,
         num_lines=None
     )
