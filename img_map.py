@@ -214,23 +214,25 @@ def merge_images_with_poisson_disc(input_folder, star_images_folder, output_fold
 import argparse
 
 
-def run_pipeline(args):
+def run_pipeline_on_single_directory(input_path, args):
     """
-    执行完整的图像处理流水线。
+    对单个目录执行完整的图像处理流水线。
     """
     # --- 路径定义 ---
-    base_dir = Path(args.input_dir)
+    base_dir = Path(input_path)
+    print(f"\n{'='*20}\nProcessing directory: {base_dir.name}\n{'='*20}")
+
     raw_input_folder = base_dir
     star_assets_folder = Path("star_images")
     map_images_folder = Path("map_images")
-    
-    # 新增：调整尺寸后的图片目录
-    resized_output_folder = base_dir / "processed_images" / "raw"
-    
-    line_output_folder = base_dir / "processed_images" / "line"
-    final_map_folder = base_dir / "processed_images" / "map"
-    merge_output_folder = base_dir / "processed_images" / "merge"
-    visualize_output_folder = base_dir / "processed_images" / "visualize"
+
+    # 所有处理后的图片都放在该目录下的 processed_images 文件夹
+    processed_images_root = base_dir / "processed_images"
+    resized_output_folder = processed_images_root / "raw"
+    line_output_folder = processed_images_root / "line"
+    final_map_folder = processed_images_root / "map"
+    merge_output_folder = processed_images_root / "merge"
+    visualize_output_folder = processed_images_root / "visualize"
 
     # 确保所有输出目录都存在
     for folder in [resized_output_folder, line_output_folder, final_map_folder, merge_output_folder, visualize_output_folder]:
@@ -292,15 +294,18 @@ def run_pipeline(args):
     else:
         print(f"错误：未知的策略 '{strategy}'。请选择 'grid', 'disc', 或 'merge'。")
 
-    print(f"--- '{strategy}' 策略处理完成 ---")
+    print(f"--- '{strategy}' 策略处理完成 for {base_dir.name} ---")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="图像处理流水线")
+    parser = argparse.ArgumentParser(
+        description="图像处理流水线：可处理单个文件夹或批量处理一个文件夹下的多个子文件夹。",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument(
         'strategy', type=str, choices=['grid', 'disc', 'merge'], help="选择要执行的策略: 'grid', 'disc', 或 'merge'")
     parser.add_argument(
-        'input_dir', type=str, help="输入文件夹的路径")
+        'input_dir', type=str, help="输入文件夹的路径。\n- 如果该文件夹内没有子文件夹，则直接处理该文件夹。\n- 如果该文件夹内有子文件夹，则会逐个处理每个子文件夹。")
 
     # 'grid' 策略的参数
     grid_group = parser.add_argument_group('grid 策略参数')
@@ -316,4 +321,22 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    run_pipeline(args)
+    root_input_dir = Path(args.input_dir)
+
+    if not root_input_dir.is_dir():
+        print(f"错误: 输入路径 '{root_input_dir}' 不是一个有效的文件夹。")
+    else:
+        # 查找所有子文件夹
+        sub_dirs = [d for d in root_input_dir.iterdir() if d.is_dir()]
+
+        if not sub_dirs:
+            # 如果没有子文件夹，则处理根目录本身
+            print(f"在 '{root_input_dir.name}' 中没有找到子文件夹，将直接处理该文件夹。")
+            run_pipeline_on_single_directory(root_input_dir, args)
+        else:
+            # 如果有子文件夹，则逐个处理
+            print(f"在 '{root_input_dir.name}' 中找到 {len(sub_dirs)} 个子文件夹，将开始批量处理。")
+            for sub_dir in sub_dirs:
+                run_pipeline_on_single_directory(sub_dir, args)
+        
+        print(f"\n{'='*20}\n所有任务处理完成。\n{'='*20}")
